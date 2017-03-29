@@ -1,0 +1,232 @@
+---
+title: "2016 Election"
+author: "Carrie Gardner"
+date: "3/29/2017"
+output: html_document
+---
+
+```{r warning=FALSE, message=FALSE}
+library(plyr)     # for recoding data
+library(ggplot2)  # for plotting
+library(NLP)      # for NLP
+library(tm)       # for Corpus()
+library(SnowballC)
+library(lsa)
+library(NMF)
+```
+
+##### Helper functions
+```{r Helper }
+set.seed(1000)
+
+# Ingest datasets and cleans data
+load.data.task <- function() {
+  data.path = "user_setA/"
+  
+  data.files = c('tweets_debate1.csv', 'tweets_debate2.csv',
+                 'tweets_debate3.csv', 'tweets_debateVP.csv')
+  data.tweets = do.call(rbind,lapply(data.files, function(f) {
+                            read.csv(f)
+                })
+         )
+  
+  data.users = read.csv('users.csv')
+  
+  data.tweets[1:3,]
+  data.users[1:3,]
+  data = merge(data.tweets, data.users, by=('userID'))
+  
+  data[1:3,]
+  
+  dim(data) # 60,378 observations
+  # if NAs exist, drop rows
+  if (any(is.na(data))) {
+    data = na.omit(data)
+  }
+  dim(data) # now 38,044 observations
+  
+# Change variable types to characters
+  data$text = as.character(data$text)
+  data$party = as.character(data$party)
+  
+  # Show data
+  data[1:3,]
+  return (data)
+}
+
+# Plot Topic Histogram
+do.topic_histo <- function(data) {
+  ggplot(data, aes(x=factor(party), fill=party)) + 
+    geom_bar(stat="count") + 
+    scale_x_discrete("Party") + 
+    scale_y_continuous("Frequency") + 
+    scale_fill_manual(values=c('blue', 'green', 'purple', 'yellow', 'orange', 'red')) + 
+    ggtitle("Party Frequency") +
+    coord_flip()
+}
+
+
+# subset data for number of top topics
+get.subdoc <- function(data, toptopics=4) {
+  selected_topics = sort(table(data$Topic), decreasing = T)[1:toptopics]
+  selected_topics = names(selected_topics)
+  selected_topics
+  
+  doc_idx = which(data$Topic %in% selected_topics)
+  subdoc = data[doc_idx,]
+  return(subdoc)
+}
+
+# Return corpus
+get.corpus <- function(subdoc) {
+  # create a corpus
+  corpus = Corpus(VectorSource(subdoc$Content))
+  return(corpus)
+}
+
+# Clean corpus
+do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
+  # lowercase
+  corpus = tm_map(corpus, content_transformer(tolower))
+  # remove stops, punctuation, numbers, whitespaces; 
+  corpus = tm_map(corpus, function(x) removeWords(x, stopwords("english")))
+  corpus = tm_map(corpus, removePunctuation)
+  corpus = tm_map(corpus, removeNumbers)
+  corpus = tm_map(corpus, stripWhitespace)
+  ## Optional - remove sparse terms
+  if (removeSparseTerms) {
+    corpus = tm_map(corpus, removeSparseTerms)
+  }
+  # stem
+  corpus = tm_map(corpus, stemDocument, language = "english")
+}
+
+# NMF
+do.nmf <- function(tdm) {
+  nmf.res = nmf(tdm, 3, "lee")
+  # estimate target matrix
+  v.hat = fitted(nmf.res)
+  # w = n * r term feature matrix
+  w = basis(nmf.res)
+  h = coef(nmf.res)
+  return(h)
+}
+
+do.mds <- function(tdm) {
+  # compute distance matrix
+  tdm = as.matrix(tdm)
+  tdm.dist = dist(t(tdm)) 
+  tdm.mds = cmdscale(tdm.dist, k = 2)
+  
+  return(tdm.mds)
+}
+
+```
+
+# Read in data 
+# Examine class Distribution
+
+```{r }
+data = load.data.task()
+dim(data)
+
+do.topic_histo(data)
+
+## Since the data is heavily unbalanced, perhaps we should randomly remove some Democrats?
+```
+
+# Question 2
+```{r }
+# Get corpus subset
+subdoc = get.subdoc(data, toptopics=4)   # subset the data to find top 4 categories
+corpus = get.corpus(subdoc)
+
+inspect(corpus[1:3])
+
+
+# Preprocess corpus (lowercase; remove stops, punctuation, numbers, whitespaces; stem)
+corpus = do.preprocess(corpus)
+inspect(corpus[1:3])
+corpus
+
+# Make Term Document Matrix (tdm)
+tdm = TermDocumentMatrix(corpus)
+
+# Extact terms w/frequency >= 4
+term.freq = findFreqTerms(tdm, 4)
+tdm.index = which(row.names(tdm) %in% term.freq)
+tdm = tdm[tdm.index,]
+dim(tdm)
+
+# Calculate MDS
+doc.mds = do.mds(tdm)
+
+# Plot MDS
+data = data.frame(x = doc.mds[, 1], 
+                  y = doc.mds[, 2], 
+                  Topic = subdoc$Topic, 
+                  id = row.names(subdoc) )
+ggplot(data, aes(x = x , y = y, color = Topic)) + 
+  geom_point(shape = 1) +
+  ggtitle("MDS Plot")
+```
+
+# Question 3
+```{r T1Q3}
+################################################
+# TF-IDF
+tfidf.tdm = as.matrix(tdm)
+
+# TF-IDF weighting
+tfidf.weights = lw_tf(tfidf.tdm) * gw_idf(tfidf.tdm)
+
+# Calculate TF-IDF MDS
+tfidf.mds = do.mds(tfidf.weights)
+
+# Plot TF-IDF MDS
+tfidf.data = data.frame(x = tfidf.mds[, 1], 
+                  y = tfidf.mds[, 2], 
+                  Topic = subdoc$Topic, 
+                  id = row.names(subdoc) )
+
+ggplot(tfidf.data, aes(x = x , y = y, color = Topic)) + 
+  geom_point(shape = 1) +
+  ggtitle("MDS Plot - TF-IDF")
+
+################################################
+# LSA
+lsa.space = lsa(tfidf.weights, dims = 4)
+
+# Calculate LSA MDS
+lsa.dist.mat = dist(t(as.textmatrix(lsa.space)))
+lsa.mds = cmdscale(lsa.dist.mat, k = 2)
+
+# Plot LSA MDS
+lsa.data = data.frame(x = lsa.mds[, 1], 
+                      y = lsa.mds[, 2], 
+                      Topic = subdoc$Topic, 
+                      id = row.names(subdoc))
+
+ggplot(lsa.data, aes(x = x, y = y, color = Topic)) + 
+  geom_point(shape = 1) +
+  ggtitle("MDS Plot - LSA")
+
+
+################################################
+# NMF
+tdm = as.matrix(tdm)
+h = do.nmf(tdm)
+
+# Calculate NMF MDS
+nmf.mds = do.mds(h)
+
+# Plot NMF MDS 
+nmf.data = data.frame(x = nmf.mds[, 1], 
+                      y = nmf.mds[, 2], 
+                      Topic = subdoc$Topic, 
+                      id = row.names(subdoc))
+
+ggplot(nmf.data, aes(x = x, y = y, color = Topic)) + 
+  geom_point(shape = 1) +
+  ggtitle("MDS Plot - NMF")
+```
