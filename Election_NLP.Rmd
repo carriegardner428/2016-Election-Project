@@ -127,6 +127,28 @@ do.topic_histo(data)
 ## Since the data is heavily unbalanced, perhaps we should randomly remove some Democrats?
 ```
 
+Collapse Other, Libertarian Party, and Green Party into Independent category.
+
+```{r}
+table(data$party)
+
+data$party[data$party=="G"] = "I"
+data$party[data$party=="O"] = "I"
+data$party[data$party=="L"] = "I"
+
+table(data$party)
+
+do.topic_histo(data)
+
+```
+
+## Word Cloud
+
+```{r}
+
+
+```
+
 # Question 2
 ```{r }
 # Get corpus subset
@@ -155,7 +177,6 @@ findFreqTerms(tdm, 50)
 
 # Calculate MDS
 doc.mds = do.mds(tdm)
-
 
 # Plot MDS
 data = data.frame(x = doc.mds[, 1], 
@@ -226,3 +247,254 @@ ggplot(nmf.data, aes(x = x, y = y, color = Topic)) +
   geom_point(shape = 1) +
   ggtitle("MDS Plot - NMF")
 ```
+
+```{r }
+# Model & Get Probabilties
+do.classification <- function(train.set, test.set, 
+                              cl.name, verbose=T) {
+  ## Return raw probabilties to plot ROC later
+  switch(cl.name, 
+         knn3 = { # k = 3
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 3, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           prob
+         },
+         knn5 = { # k = 5
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 5, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           prob
+         },
+         knn7 = { # k = 7
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 7, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           prob
+         },
+         knn9 = { # k = 9
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 9, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           prob
+         },
+         glm = { # logistic regression
+           model = glm(y~., family=binomial, data=train.set)
+           if (verbose) {
+             print(summary(model))             
+           }
+           prob = predict(model, newdata=test.set, type="response") 
+           prob
+         },
+         nb = { # naive bayes
+           model = naiveBayes(y~., data=train.set)
+           prob = predict(model, newdata=test.set, type="raw") 
+           prob = prob[,2]/rowSums(prob) # renormalize the probabilites.
+           prob
+         },
+         dtree = {  # decision tree
+           model = rpart(y~., data=train.set)
+           print(summary(model))  # detailed summary of splits
+           printcp(model)         # print the cross-validation results
+           plotcp(model)          # visualize the cross-validation results
+           # plot the tree
+           plot(model, uniform=TRUE, main="Decision Tree")
+           text(model, use.n=TRUE, all=TRUE, cex=.8)
+           prob = predict(model, newdata=test.set)
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         prunedTree = { # pruned decision tree
+           model = rpart(y~., data=train.set)
+           if (verbose) {
+             print(summary(model))  # detailed summary of splits
+             printcp(model)         # print the cross-validation results
+             plotcp(model)          # visualize the cross-validation results
+             # plot the tree
+             plot(model, uniform=TRUE, main="Pruned Decision Tree")
+             text(model, use.n=TRUE, all=TRUE, cex=.8)
+           }
+           prob = predict(model, newdata=test.set)
+           if (1) { # pruned tree
+             # prune the tree
+             pfit<- prune(model, cp=model$cptable[which.min(model$cptable[,"xerror"]),"CP"])
+             prob = predict(pfit, newdata=test.set)
+             # plot the pruned tree
+             plot(pfit, uniform=TRUE,main="Pruned Decision Tree")
+             text(pfit, use.n=TRUE, all=TRUE, cex=.8)
+           }
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         svm_radial = {
+           model = svm(y~., data=train.set, probability=T)
+           if (0) { # kernel = radial
+             # gamma = 10^(-6:-1)
+             # cost  = 10^(-1:1)
+             tuned <- tune.svm(y~., data = train.set, 
+                               kernel="radial", 
+                               gamma = 10^(-6:-1), cost = 10^(-1:1))
+             #print(summary(tuned))
+             gamma = tuned[['best.parameters']]$gamma
+             cost = tuned[['best.parameters']]$cost
+             model = svm(y~., data = train.set, probability=T, 
+                         kernel="radial", gamma=gamma, cost=cost)                        
+           }
+           prob = predict(model, newdata=test.set, probability=T)
+           prob = attr(prob,"probabilities")
+           # print(dim(prob))
+           prob = prob[,which(colnames(prob)==1)]/rowSums(prob)
+           # prob
+         },
+         svm = {
+           model = svm(y~., data=train.set, probability=T)
+           prob = predict(model, newdata=test.set, probability=T)
+           prob = attr(prob,"probabilities")
+           prob = cbind(prob,as.character(test.set$y))
+           prob = prob[,which(colnames(prob)==1)]/rowSums(prob)
+           prob
+         },
+         svm_sigmoid = {
+           model = svm(y~., data=train.set, probability=T)
+           if (1) { # kernel = sigmoid
+             # gamma = 10^(-6:-1)
+             # cost  = 10^(-1:1)
+             tuned <- tune.svm(y~., data = train.set,
+                               kernel="sigmoid",
+                               gamma = 10^(-6:-1), cost = 10^(-1:1))
+             #print(summary(tuned))
+             gamma = tuned[['best.parameters']]$gamma
+             cost = tuned[['best.parameters']]$cost
+             model = svm(y~., data = train.set, probability=T,
+                         kernel="radial", gamma=gamma, cost=cost)
+           }
+           prob = predict(model, newdata=test.set, probability=T)
+           prob = attr(prob,"probabilities")
+           # print(dim(prob))
+           print(prob)
+           prob
+           # prob = prob[,which(colnames(prob)==1)]/rowSums(prob)
+           # prob
+         },
+         svm_poly = {
+           model = svm(y~., data=train.set, probability=T)
+           if (1) { # kernel = polynomial
+             # gamma = 10^(-6:-1)
+             # cost  = 10^(-1:1)
+             tuned <- tune.svm(y~., data = train.set,
+                               kernel="polynomial",
+                               gamma = 10^(-6:-1), cost = 10^(-1:1))
+             #print(summary(tuned))
+             gamma = tuned[['best.parameters']]$gamma
+             cost = tuned[['best.parameters']]$cost
+             model = svm(y~., data = train.set, probability=T,
+                         kernel="radial", gamma=gamma, cost=cost)
+           }
+           prob = predict(model, newdata=test.set, probability=T)
+           prob = attr(prob,"probabilities")
+           # print(dim(prob))
+           prob = prob[,which(colnames(prob)==1)]/rowSums(prob)
+           # prob
+         },
+         ada = {
+           model = ada(y~., data = train.set)
+           prob = predict(model, newdata=test.set, type='probs')
+           prob = prob[,2]/rowSums(prob)
+           # prob
+         }
+  ) 
+  return (prob)
+}
+
+# Run 10-fold Cross Validation
+k.fold.cv <- function(dataset, cl.name, k.fold=10, prob.cutoff=0.5, evaluate = FALSE) {
+  ## default: 10-fold CV, cut-off 0.5
+  n.obs <- nrow(dataset) # no. of observations
+  s = sample(n.obs)
+  errors = dim(k.fold)
+  precisions = dim(k.fold)
+  recalls = dim(k.fold)
+  fscores = dim(k.fold)
+  accuracies = dim(k.fold)
+  probs = NULL
+  actuals = NULL
+  for (k in 1:k.fold) {
+    test.idx = which(s %% k.fold == (k-1) ) # use modular operator
+    train.set = dataset[-test.idx,]
+    test.set = dataset[test.idx,]
+    cat(k.fold,'-fold CV run',k,cl.name,':',
+        '#training:',nrow(train.set),
+        '#testing',nrow(test.set),'\n')
+    prob = do.classification(train.set, test.set, cl.name)
+    predicted = as.numeric(prob > prob.cutoff)
+    actual = test.set$y
+    confusion.matrix = table(actual, factor(predicted,levels=c(0,1))) # confusion matrix
+    
+    TP = confusion.matrix[2,2] # if "1" is positive
+    TN = confusion.matrix[1,1] # if "0" is negative
+    FP = confusion.matrix[1,2]
+    FN = confusion.matrix[2,1]
+    
+    precision = TP/(FP+TP)
+    recall = TP/(FN+TP)
+    fscore = 2/(1/precision + 1/recall)
+    error = (FP + FN) / nrow(test.set)
+    errors[k] = error
+    cat('\t\terror=',error,'\n')
+    
+    accuracy = 1 - error
+    
+    precisions[k] = precision
+    recalls[k] = recall
+    fscores[k] = fscore
+    probs = c(probs,prob)
+    actuals = c(actuals,actual)
+  }
+  avg.error = mean(errors)
+  cat('avg error=',avg.error,'\n')
+  avg.accuracy = 1 - avg.error
+  cat('avg Accuracy=',avg.accuracy,'\n')
+  avg.precision = mean(precisions)
+  cat('avg Precision=',avg.precision,'\n')
+  avg.recall = mean(recalls)
+  cat('avg recall=',avg.recall,'\n')
+  avg.fscore = mean(fscores)
+  cat('avg fscore=',avg.fscore,'\n')
+  
+  ## plot ROC
+  result = data.frame(probs,actuals)
+  pred = prediction(result$probs,result$actuals)
+  perf = performance(pred, "tpr","fpr")
+  auc = performance(pred,"auc")
+  auc = as.numeric(auc@y.values)
+  
+  get.measure <- function(pred, measure.name='auc') {
+    perf = performance(pred,measure.name)
+    m <- unlist(slot(perf, "y.values"))
+    m
+  }
+  err = mean(get.measure(pred, 'err'))
+  accuracy = 1-err
+  cat('accuracy=',accuracy,'\n')
+  precision = mean(get.measure(pred, 'prec'),na.rm=T)
+  recall = mean(get.measure(pred, 'rec'),na.rm=T)
+  fscore = mean(get.measure(pred, 'f'),na.rm=T)
+  cat('error=',err,'precision=',precision,'recall=',recall,'f-score',fscore,'\n')
+  auc = get.measure(pred, 'auc')
+  cat('auc=',auc,'\n')
+  
+  if (evaluate) return (perf)
+  else
+    return(rbind(
+      error = err,
+      accuracy = 1-err,
+      precision = precision,
+      recall = recall,
+      fscore = fscore,
+      auc = auc))
+}
+
+```
+
+
+
