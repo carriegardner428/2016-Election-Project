@@ -182,9 +182,25 @@ library(stringr)
 
 tweets = data$text
 
-hashtags = str_exract_all(data$text, "#\\S+")
+hashtags = str_extract_all(data$text, "#\\S+")
 
-str_extract_all("Hello peopllz! My new home is #crazy gr8! #wow", "#\\S+")
+hashtags <- hashtags[character(0)]
+hashtags[1:10]
+str(hashtags)
+
+pat = "(#\\S+)"
+data = transform(data,hashtags=stringr::str_extract(text,pat))
+
+hashtags = data$hashtags
+hashtags = na.omit(hashtags)
+hashtags[1:3]
+
+
+wordcloud(hashtags, max.words = 100, random.order = FALSE)
+
+
+corpus = Corpus(VectorSource(data$hashtags))
+wordcloud(corpus, max.words = 100, random.order = FALSE)
 
 
 
