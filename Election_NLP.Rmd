@@ -143,9 +143,20 @@ do.topic_histo(data)
 ```
 
 ## Word Cloud
-
+#### Reference: https://www.r-bloggers.com/building-wordclouds-in-r/
 ```{r}
+library(wordcloud)
+corpus = Corpus(VectorSource(data$text))
+corpus = tm_map(corpus, PlainTextDocument)
 
+corpus = tm_map(corpus, removePunctuation)
+corpus = tm_map(corpus, removeWords, stopwords('english'))
+corpus = tm_map(corpus, removeWords, c('the', 'this', stopwords('english')))
+
+corpus = tm_map(corpus, stemDocument)
+inspect(corpus[1:3])
+
+wordcloud(corpus, max.words = 100, random.order = FALSE)
 
 ```
 
