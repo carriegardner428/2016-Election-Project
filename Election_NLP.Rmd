@@ -78,7 +78,7 @@ get.subdoc <- function(data, toptopics=4) {
 }
 
 # Clean corpus
-do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
+do.preprocess <- function(corpus, stem=FALSE, removeSparseTerms=FALSE) {
   # lowercase
   corpus = tm_map(corpus, content_transformer(tolower))
   # remove stops, punctuation, numbers, whitespaces; 
@@ -91,7 +91,10 @@ do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
     corpus = tm_map(corpus, removeSparseTerms)
   }
   # stem
-  corpus = tm_map(corpus, stemDocument, language = "english")
+  if (stem) {
+    corpus = tm_map(corpus, stemDocument, language = "english")
+  }
+  return (corpus)
 }
 
 # NMF
@@ -138,7 +141,18 @@ data$party[data$party=="L"] = "I"
 
 table(data$party)
 
-do.topic_histo(data)
+ggplot(data, aes(x=factor(party), fill=party)) + 
+    geom_bar(stat="count") + 
+    scale_x_discrete("Party") + 
+    scale_y_continuous("Frequency") + 
+    scale_fill_manual(values=c('blue', 'purple','red')) + 
+    ggtitle("Party Frequency") +
+    coord_flip()
+  
+# Plot Topic Histogram
+do.topic_histo <- function(data) {
+
+}
 
 ```
 
@@ -146,20 +160,35 @@ do.topic_histo(data)
 #### Reference: https://www.r-bloggers.com/building-wordclouds-in-r/
 ```{r}
 library(wordcloud)
+library(RColorBrewer)
 corpus = Corpus(VectorSource(data$text))
-corpus = tm_map(corpus, PlainTextDocument)
 
-corpus = tm_map(corpus, removePunctuation)
-corpus = tm_map(corpus, removeWords, stopwords('english'))
-corpus = tm_map(corpus, removeWords, c('the', 'this', stopwords('english')))
+corpus = do.preprocess(corpus, stem=FALSE)
+inspect(corpus[100:300])
 
-corpus = tm_map(corpus, stemDocument)
-inspect(corpus[1:3])
+# Make Term Document Matrix (tdm)
+tdm = TermDocumentMatrix(corpus)
 
 wordcloud(corpus, max.words = 100, random.order = FALSE)
+wordcloud(corpus, max.words = 100, random.order = FALSE, colors=brewer.pal(8, "Dark2"))
+wordcloud(corpus, max.words = 100, random.order = FALSE, colors="Purple")
 
 ```
 
+## Extract Hashtags
+
+```{r}
+library(stringr)
+
+tweets = data$text
+
+hashtags = str_exract_all(data$text, "#\\S+")
+
+str_extract_all("Hello peopllz! My new home is #crazy gr8! #wow", "#\\S+")
+
+
+
+```
 # Question 2
 ```{r }
 # Get corpus subset
