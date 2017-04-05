@@ -134,13 +134,14 @@ Collapse Other, Libertarian Party, and Green Party into Independent category.
 
 ```{r}
 table(data$party)
-
+# Relabel
 data$party[data$party=="G"] = "I"
 data$party[data$party=="O"] = "I"
 data$party[data$party=="L"] = "I"
 
 table(data$party)
 
+# Plot Histogram
 ggplot(data, aes(x=factor(party), fill=party)) + 
     geom_bar(stat="count") + 
     scale_x_discrete("Party") + 
@@ -148,11 +149,6 @@ ggplot(data, aes(x=factor(party), fill=party)) +
     scale_fill_manual(values=c('blue', 'purple','red')) + 
     ggtitle("Party Frequency") +
     coord_flip()
-  
-# Plot Topic Histogram
-do.topic_histo <- function(data) {
-
-}
 
 ```
 
@@ -256,3 +252,34 @@ corpus = Corpus(VectorSource(data$hashtags))
 wordcloud(corpus, max.words = 100, random.order = FALSE)
 
 ```
+
+```{r}
+# Extract Retweets
+
+pat = "(RT @\\S+)"
+data = transform(data,retweets=stringr::str_extract(text,pat))
+
+retweets = data$retweets
+retweets = na.omit(retweets)
+retweets
+
+length(retweets)
+# 19434 tweets are retweets
+```
+
+```{r}
+# Extract Tweets w/Mentions (@)
+pat = "(@\\S+)"
+
+data = transform(data,mentions=stringr::str_extract(text,pat))
+
+mentions = data$mentions
+mentions = na.omit(mentions)
+mentions
+
+```
+
+
+
+
+
