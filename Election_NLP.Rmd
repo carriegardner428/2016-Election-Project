@@ -173,6 +173,25 @@ wordcloud(corpus, max.words = 100, random.order = FALSE)
 wordcloud(corpus, max.words = 100, random.order = FALSE, colors=brewer.pal(8, "Dark2"))
 wordcloud(corpus, max.words = 100, random.order = FALSE, colors="Purple")
 
+
+# GOP Corpus
+gop_corpus = data[which(data$party == "R"),]
+gop_corpus = Corpus(VectorSource(gop_corpus$text))
+gop_corpus = do.preprocess(gop_corpus, stem=FALSE)
+wordcloud(gop_corpus, max.words = 100, random.order = FALSE, colors="Red")
+  
+# Dem Corpus
+dem_corpus = data[which(data$party == "D"),]
+dem_corpus = Corpus(VectorSource(dem_corpus$text))
+dem_corpus = do.preprocess(dem_corpus, stem=FALSE)
+wordcloud(dem_corpus, max.words = 100, random.order = FALSE, colors="Blue")
+
+# Independent Corpus
+ind_corpus = data[which(data$party == "I"),]
+ind_corpus = Corpus(VectorSource(ind_corpus$text))
+ind_corpus = do.preprocess(ind_corpus, stem=FALSE)
+wordcloud(ind_corpus, max.words = 100, random.order = FALSE, colors="Purple")
+
 ```
 
 ## Extract Hashtags
@@ -185,7 +204,46 @@ data = transform(data,hashtags=stringr::str_extract(text,pat))
 
 hashtags = data$hashtags
 hashtags = na.omit(hashtags)
-hashtags[1:10]
+
+top_hashtags = sort(table(hashtags), decreasing = T)
+barplot(top_hashtags[1:10],horiz=TRUE, 
+        main="Top Hashtags", 
+  	    xlab="Counts", 
+  	    cex.names=0.5, las=1)
+
+
+# GOP Hashtags
+gop_hashtags = data[which(data$party == "R"),]
+gop_hashtags = gop_hashtags$hashtags
+wordcloud(gop_hashtags, max.words = 100, random.order = FALSE, colors="Red")
+
+## extract top 10 GOP Hashtags
+gop_top10 = sort(table(gop_hashtags), decreasing = T)
+# Plot most frequent 
+barplot(gop_top10[1:10],horiz=TRUE, 
+        main="GOP Hashtags", 
+  	    xlab="Counts", 
+  	    cex.names=0.5, las=1)
+
+# Dem Hashtags
+dem_hashtags = data[which(data$party == "D"),]
+dem_hashtags = dem_hashtags$hashtags
+wordcloud(dem_hashtags, max.words = 100, random.order = FALSE, colors="Blue")
+
+## extract top 10 Dem Hashtags
+dem_top10 = sort(table(dem_hashtags), decreasing = T)
+# Plot most frequent 
+barplot(dem_top10[1:10],horiz=TRUE, 
+        main="Dem Hashtags", 
+  	    xlab="Counts", 
+        cex.names=0.5, las=1)
+
+# Independent Hashtags
+ind_hashtags = data[which(data$party == "I"),]
+ind_hashtags = ind_hashtags$hashtags
+wordcloud(ind_hashtags, max.words = 100, random.order = FALSE, colors="Purple")
+
+
 
 ```
 
