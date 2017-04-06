@@ -61,7 +61,7 @@ do.topic_histo <- function(data) {
     scale_x_discrete("Party") + 
     scale_y_continuous("Frequency") + 
     scale_fill_manual(values=c('blue', 'green', 'purple', 'yellow', 'orange', 'red')) + 
-    ggtitle("Party Frequency") +
+    ggtitle("Party Frequency Across Tweets") +
     coord_flip()
 }
 
@@ -124,14 +124,15 @@ do.mds <- function(tdm) {
 ```{r }
 data = load.data.task()
 dim(data)
-
-do.topic_histo(data)
-
-## Since the data is heavily unbalanced, perhaps we should randomly remove some Democrats?
 ```
 
-Collapse Other, Libertarian Party, and Green Party into Independent category.
+# Distribution of Tweets
+```{r}
+do.topic_histo(data)
+## Since the data is heavily unbalanced, perhaps we should downsample to remove Democratic tweets?
+```
 
+## Collapse Other, Libertarian Party, and Green Party into Independent category.
 ```{r}
 table(data$party)
 # Relabel
@@ -140,17 +141,125 @@ data$party[data$party=="O"] = "I"
 data$party[data$party=="L"] = "I"
 
 table(data$party)
+```
 
-# Plot Histogram
+## Replot Tweet Class Distribution
+```{r}
 ggplot(data, aes(x=factor(party), fill=party)) + 
     geom_bar(stat="count") + 
     scale_x_discrete("Party") + 
     scale_y_continuous("Frequency") + 
     scale_fill_manual(values=c('blue', 'purple','red')) + 
-    ggtitle("Party Frequency") +
+    ggtitle("Party Frequency Across Tweets") +
     coord_flip()
 
 ```
+# Examine Distribution of Users
+```{r}
+data.users = read.csv('users.csv')
+# Plot Histogram
+ggplot(data.users, aes(x=factor(party), fill=party)) + 
+    geom_bar(stat="count") + 
+    scale_x_discrete("Party") + 
+    scale_y_continuous("Frequency") + 
+    scale_fill_manual(values=c('blue', 'green', 'purple', 'yellow', 'orange', 'red'), na.value="grey50") + 
+    ggtitle("Party Frequency Across Users") +
+    coord_flip()
+
+# dim(data.users)
+# 22,853 users
+```
+
+```{r}
+table(data.users$party)
+
+## Collapse G, L, and O into Independent Party
+
+# Relabel
+data.users$party[data.users$party=="G"] = "I"
+data.users$party[data.users$party=="O"] = "I"
+data.users$party[data.users$party=="L"] = "I"
+
+data.users$party = droplevels(data.users$party)
+table(data.users$party)
+```
+
+## Replot User Class Distribution
+```{r}
+ggplot(data.users, aes(x=factor(party), fill=party)) + 
+    geom_bar(stat="count") + 
+    scale_x_discrete("Party") + 
+    scale_y_continuous("Frequency") + 
+    scale_fill_manual(values=c('blue', 'purple','red'), na.value="grey50") + 
+    ggtitle("Party Frequency Across Users") +
+    coord_flip()
+
+```
+# Handle NAs w/Heuristic to Label Class by 2016 State Electoral College Choice
+```{r}
+table(data.users$state_code)
+
+# Recode data
+# data.users$party[which(data.users$party == "NA" &  ]
+
+
+data.users$party[data.users$party=="G"] = "I"
+
+gop_corpus = data[which(data$party == "R"),]
+
+```
+
+# US Choropleth
+```{r}
+## Reference: https://plot.ly/r/choropleth-maps/#choropleth-maps-in-r
+
+##### TO DO :  NEED TO GET DATA IN PROPER FORMAT...df = State Code, Dem Count, GOP Count, Ind Count, Electoral College Winner
+
+data.map = unique(data.users$state_code)
+data.map$
+
+str(data.map)
+
+levels = table(data.map$party)
+data.map$Dem = levels[1]
+data.map$Dem = 
+
+data.map$hover = with(data.map, paste(state_code, party))
+
+
+
+library(plotly)
+df <- read.csv("https://raw.githubusercontent.com/plotly/datasets/master/2011_us_ag_exports.csv")
+
+
+df$hover <- with(df, paste(state, '<br>', "Beef", beef, "Dairy", dairy, "<br>",
+                           "Fruits", total.fruits, "Veggies", total.veggies,
+                           "<br>", "Wheat", wheat, "Corn", corn))
+# give state boundaries a white border
+l <- list(color = toRGB("white"), width = 2)
+# specify some map projection/options
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB('white')
+)
+
+p <- plot_geo(df, locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~total.exports, text = ~hover, locations = ~code,
+    color = ~total.exports, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Millions USD") %>%
+  layout(
+    title = '2011 US Agriculture Exports by State<br>(Hover for breakdown)',
+    geo = g
+  )
+
+p
+
+```
+
 
 ## Word Cloud
 #### Reference: https://www.r-bloggers.com/building-wordclouds-in-r/
@@ -165,10 +274,9 @@ inspect(corpus[10:30])
 # Make Term Document Matrix (tdm)
 tdm = TermDocumentMatrix(corpus)
 
-wordcloud(corpus, max.words = 100, random.order = FALSE)
-wordcloud(corpus, max.words = 100, random.order = FALSE, colors=brewer.pal(8, "Dark2"))
-wordcloud(corpus, max.words = 100, random.order = FALSE, colors="Purple")
+dim(tdm)
 
+wordcloud(corpus, max.words = 100, random.order = FALSE)
 
 # GOP Corpus
 gop_corpus = data[which(data$party == "R"),]
@@ -207,6 +315,7 @@ barplot(top_hashtags[1:10],horiz=TRUE,
   	    xlab="Counts", 
   	    cex.names=0.5, las=1)
 
+wordcloud(hashtags, max.words = 100, random.order = FALSE)
 
 # GOP Hashtags
 gop_hashtags = data[which(data$party == "R"),]
@@ -279,6 +388,9 @@ mentions
 
 ```
 
+
+```{r}
+# Most Favorited Tweet
 
 
 
