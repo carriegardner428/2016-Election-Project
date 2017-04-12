@@ -1,0 +1,130 @@
+---
+title: "DTM Modeling"
+author: "Carrie Gardner"
+date: "4/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(plyr)     # for recoding data
+library(NLP)      # for NLP
+library(tm)       # for Corpus()
+library(SnowballC)
+library(lsa)
+library(NMF)
+```
+
+```{r Helper}
+set.seed(1000)
+
+# Ingest datasets and cleans data
+load.data.task <- function() {
+  data.path = "user_setA/"
+  
+  data.files = c('tweets_debate1.csv', 'tweets_debate2.csv',
+                 'tweets_debate3.csv', 'tweets_debateVP.csv')
+  data.tweets = do.call(rbind,lapply(data.files, function(f) {
+                            read.csv(f)
+                })
+         )
+  
+  data.users = read.csv('users.csv')
+  
+  data.tweets[1:3,]
+  data.users[1:3,]
+  data = merge(data.tweets, data.users, by=('userID'))
+  
+  data[1:3,]
+  
+  # Collapse parties
+  table(data$party)
+  data$party[data$party=="G"] = "I"
+  data$party[data$party=="O"] = "I"
+  data$party[data$party=="L"] = "I"
+  
+  dim(data) # 60,378 observations
+  # if NAs exist, drop rows
+  if (any(is.na(data))) {
+    data = na.omit(data)
+  }
+  dim(data) # now 38,044 observations
+  
+# Change variable types to characters
+  data$text = as.character(data$text)
+  data$party = as.character(data$party)
+  
+  # Show data
+  data[1:3,]
+  return (data)
+}
+
+# subset data and pull out Democrats, Republicans, and Independents
+#### NEED TO UPDATE
+get.subdoc <- function(data, toptopics=4) {
+  selected_topics = sort(table(data$Topic), decreasing = T)[1:toptopics]
+  selected_topics = names(selected_topics)
+  selected_topics
+  
+  doc_idx = which(data$Topic %in% selected_topics)
+  subdoc = data[doc_idx,]
+  return(subdoc)
+}
+
+# Clean corpus
+do.preprocess <- function(corpus, stem=FALSE, removeSparseTerms=FALSE) {
+  # lowercase
+  corpus = tm_map(corpus, content_transformer(tolower))
+  # remove stops, punctuation, numbers, whitespaces; 
+  corpus = tm_map(corpus, function(x) removeWords(x, stopwords("english")))
+  corpus = tm_map(corpus, removePunctuation)
+  corpus = tm_map(corpus, removeNumbers)
+  corpus = tm_map(corpus, stripWhitespace)
+  ## Optional - remove sparse terms
+  if (removeSparseTerms) {
+    corpus = tm_map(corpus, removeSparseTerms)
+  }
+  # stem
+  if (stem) {
+    corpus = tm_map(corpus, stemDocument, language = "english")
+  }
+  return (corpus)
+}
+
+# NMF
+do.nmf <- function(tdm) {
+  nmf.res = nmf(tdm, 3, "lee")
+  # estimate target matrix
+  v.hat = fitted(nmf.res)
+  # w = n * r term feature matrix
+  w = basis(nmf.res)
+  h = coef(nmf.res)
+  return(h)
+}
+
+do.mds <- function(tdm) {
+  # compute distance matrix
+  tdm = as.matrix(tdm)
+  tdm.dist = dist(t(tdm)) 
+  tdm.mds = cmdscale(tdm.dist, k = 2)
+  
+  return(tdm.mds)
+}
+
+```
+
+
+```{r }
+data = load.data.task()
+table(data$party)
+```
+
+
+```{r }
+
+
+```
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
