@@ -202,7 +202,6 @@ table(data.users$state_code)
 # Recode data
 # data.users$party[which(data.users$party == "NA" &  ]
 
-
 data.users$party[data.users$party=="G"] = "I"
 
 gop_corpus = data[which(data$party == "R"),]
