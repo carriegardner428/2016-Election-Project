@@ -17,37 +17,30 @@ library(NMF)
 ```{r Helper}
 set.seed(1000)
 
-# Ingest datasets and cleans data
-load.data.task <- function() {
-  data.path = "user_setA/"
+load.data.task1 <- function() {
+
+  user.tweets = read.csv('tweets_by_user.csv')
+  users.party = read.csv('users.csv')
   
-  data.files = c('tweets_debate1.csv', 'tweets_debate2.csv',
-                 'tweets_debate3.csv', 'tweets_debateVP.csv')
-  data.tweets = do.call(rbind,lapply(data.files, function(f) {
-                            read.csv(f)
-                })
-         )
+  user.tweets[1:3,]
+  users.party[1:3,]
   
-  data.users = read.csv('users.csv')
-  
-  data.tweets[1:3,]
-  data.users[1:3,]
-  data = merge(data.tweets, data.users, by=('userID'))
-  
+  data = merge(user.tweets, users.party, by=('userID'))
   data[1:3,]
+  
+    # if NAs exist, drop rows
+  if (any(is.na(data))) {
+    data = na.omit(data)
+  }
   
   # Collapse parties
   table(data$party)
   data$party[data$party=="G"] = "I"
   data$party[data$party=="O"] = "I"
   data$party[data$party=="L"] = "I"
+  table(data$party)
   
-  dim(data) # 60,378 observations
-  # if NAs exist, drop rows
-  if (any(is.na(data))) {
-    data = na.omit(data)
-  }
-  dim(data) # now 38,044 observations
+  dim(data) # 1,866 users (w/o party NAs)
   
 # Change variable types to characters
   data$text = as.character(data$text)
@@ -58,73 +51,180 @@ load.data.task <- function() {
   return (data)
 }
 
-# subset data and pull out Democrats, Republicans, and Independents
-#### NEED TO UPDATE
-get.subdoc <- function(data, toptopics=4) {
-  selected_topics = sort(table(data$Topic), decreasing = T)[1:toptopics]
-  selected_topics = names(selected_topics)
-  selected_topics
-  
-  doc_idx = which(data$Topic %in% selected_topics)
-  subdoc = data[doc_idx,]
-  return(subdoc)
-}
 
 # Clean corpus
-do.preprocess <- function(corpus, stem=FALSE, removeSparseTerms=FALSE) {
+do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
   # lowercase
   corpus = tm_map(corpus, content_transformer(tolower))
   # remove stops, punctuation, numbers, whitespaces; 
-  corpus = tm_map(corpus, function(x) removeWords(x, stopwords("english")))
-  corpus = tm_map(corpus, removePunctuation)
-  corpus = tm_map(corpus, removeNumbers)
+
+    # Remove everything besides english letters or space
+  remov = function(x) gsub("[^[:alpha:][:space:]]*", "", x)
+  corpus <- tm_map(corpus, content_transformer(remov))
+  
+  myStops = c(stopwords("english"), "https", "http", "debate", "debatenight", "debate night")
+  corpus = tm_map(corpus, removeWords, myStops)
   corpus = tm_map(corpus, stripWhitespace)
+  
   ## Optional - remove sparse terms
   if (removeSparseTerms) {
     corpus = tm_map(corpus, removeSparseTerms)
   }
+  
+  # remove URLs
+  removeURL = function(x) gsub("http[^[:space:]]*", "", x)
+  corpus = tm_map(corpus, removeURL)
   # stem
-  if (stem) {
-    corpus = tm_map(corpus, stemDocument, language = "english")
-  }
+  # corpus = tm_map(corpus, stemDocument)
+  
   return (corpus)
 }
 
-# NMF
-do.nmf <- function(tdm) {
-  nmf.res = nmf(tdm, 3, "lee")
-  # estimate target matrix
-  v.hat = fitted(nmf.res)
-  # w = n * r term feature matrix
-  w = basis(nmf.res)
-  h = coef(nmf.res)
-  return(h)
-}
+```
 
-do.mds <- function(tdm) {
-  # compute distance matrix
-  tdm = as.matrix(tdm)
-  tdm.dist = dist(t(tdm)) 
-  tdm.mds = cmdscale(tdm.dist, k = 2)
-  
-  return(tdm.mds)
-}
+```{r }
+# Tweets by User
+user.tweets = load.data.task1()
 
 ```
+
+```{r}
+# User.tweets is a dataframe of unique users and a string of all of their tweets 
+user.tweets[1:3,]
+dim(user.tweets) # 1,866 users
+
+# Get corpus
+user.corpus = Corpus(VectorSource(user.tweets$text))
+inspect(user.corpus[1:3])
+
+# Preprocess corpus (lowercase; remove stops, punctuation, numbers, whitespaces; stem)
+user.corpus = do.preprocess(user.corpus)
+inspect(user.corpus[1:3])
+
+## Finding Frequent Terms
+tdm = TermDocumentMatrix(user.corpus)
+findFreqTerms(tdm,lowfreq = 169)
+ 
+# Make Term Document Matrix (tdm), where documents are user's Tweet Strings
+user.tdm = TermDocumentMatrix(user.corpus,
+                         control = list(
+                                        stemming = F)
+                         )
+user.tdm
+user.tdm.tfidf = TermDocumentMatrix(user.corpus,
+                         control = list(weighting = weightTfIdf,
+                                        stemming = F)
+                         )
+user.tdm.tfidf
+
+# Make Document Term Matrix (DTM), where documents are user's Tweet Strings
+user.dtm = DocumentTermMatrix(user.corpus,
+                         control = list(
+                                        stemming = F)
+                         )
+user.dtm
+user.dtm.tfidf = DocumentTermMatrix(user.corpus,
+                         control = list(weighting = weightTfIdf,
+                                        stemming = F)
+                         )
+
+user.dtm.tfidf
+
+## Getting count of words
+termcount = apply(user.tdm,1,sum)
+head(termcount[order(termcount,decreasing = T)], 20)
+
+## Remove Sparsity
+tdm2 = removeSparseTerms(tdm, .99)
+tdm2
+user.tdm.tfidf2 = removeSparseTerms(user.tdm.tfidf, .99)
+user.tdm.tfidf2
+
+term.freq <- rowSums(as.matrix(user.tdm))
+term.freq <- subset(term.freq, term.freq >= 25)
+df.2 <- data.frame(term = names(term.freq), freq = term.freq)
+dim(df.2)
+
+library(ggplot2)
+ggplot(df.2, aes(x = term, y = freq)) + geom_bar(stat = "identity")
+    xlab("Terms") + ylab("Count") + coord_flip()
+
+    
+#remove sparse terms
+tdm2 = as.matrix(tdm)
+
+#cluster terms
+distMatrix <- dist(scale(tdm2))
+fit <- hclust(distMatrix, method = "ward.D2")
+plot(fit)
+rect.hclust(fit, k=6) #cut tree into 6 clusters
+
+
+
+
+### Try require(quanteda)
+library(quanteda)
+myDfm <- dfm(user.tweets$text, verbose = FALSE)
+docfreq(myDfm)
+dfm_trim(myDfm, min_count = 20)
+topfeatures(myDfm, 20)  # 20 top words
+textplot_wordcloud(dfm_trim(myDfm, min_count = 6))
+
+corpus2 = corpus(user.tweets)
+corpus2 = do.preprocess(corpus2)
+dfm = dfm(corpus2)
+
+
+inspect(user.tfidf[2005:2015,100:103])
+
+freq=rowSums(as.matrix(user.tfidf))
+head(freq,10)
+
+tail(freq,10)
+
+plot(sort(freq, decreasing = T),col="blue",main="Word TF-IDF frequencies", xlab="TF-IDF-based rank", ylab = "TF-IDF")
+
+tail(sort(freq),n=10)
+
+high.freq=tail(sort(freq),n=10)
+hfp.df=as.data.frame(sort(high.freq))
+hfp.df$names <- rownames(hfp.df) 
+
+library(ggplot2)
+ggplot(hfp.df, aes(reorder(names,high.freq), high.freq)) +
+  geom_bar(stat="identity") + coord_flip() + 
+  xlab("Terms") + ylab("Frequency") +
+  ggtitle("Term frequencies")
+
+```
+
 
 
 ```{r }
-data = load.data.task()
-table(data$party)
+freq.terms = findFreqTerms(user.tdm, lowfreq = 20)
+freq.terms
+
+## Topic Modeling
+
+user.dtm = as.DocumentTermMatrix(user.tdm)
+rowTotals <- apply(user.dtm , 1, sum) #Find the sum of words in each Document
+dtm.new   <- user.dtm[rowTotals> 0, ]           #remove all docs without words
+
+library(topicmodels)
+lda = LDA(dtm.new, k = 3)
+(term <- terms(lda, 6)) # first 6 terms of every topic
+
+term <- apply(term, MARGIN = 2, paste, collapse = ", ")
+   
+# first topic identified for every document (tweet)
+topic <- topics(lda, 1)
+
+subset =user.tweets[c(-3,-5),] # Random drop 2 to match dimensions of LDA
+dim(subset)
+topics <- data.frame(party = as.character(subset$party), topic)
+
+qplot(party, ..count.., data=topics, geom="density",
+      fill=term[topic], position = "stack")
+    
+    
 ```
-
-
-```{r }
-
-
-```
-
-
-
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
