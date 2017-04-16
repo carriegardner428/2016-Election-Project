@@ -9,18 +9,27 @@ output: html_document
 library(plyr)     # for recoding data
 library(NLP)      # for NLP
 library(tm)       # for Corpus()
+library(e1071)    # svm
+library(rpart)    # decision trees
+library(ada)      # for adaboost
 library(SnowballC)
 library(lsa)
 library(NMF)
 library(rJava)
 library(openNLP)
+library(NLP)  
+library(RWeka)
+library(magrittr)
+library(caret)
+library(Matrix)
+library(SparseM)
 ```
 
 
 ```{r }
 set.seed(1000)
 
-load.data.task1 <- function() {
+load.data <- function() {
 
   user.tweets = read.csv('tweets_by_user.csv')
   users.party = read.csv('users.csv')
@@ -54,6 +63,24 @@ load.data.task1 <- function() {
   return (data)
 }
 
+load.data.DR <- function() {
+  # preprocessed in python
+  tweets = read.csv('DR_users.csv')
+  tweets = tweets[,-1]
+  tweets[1:3,]
+  table(tweets$party) # D:881, R:383
+  
+  tweets$text = as.character(tweets$text)
+  tweets$state_code = as.character(tweets$state_code)
+  
+  # Recode Dems = 0, Reps = 1
+  tweets$party = revalue(tweets$party, c("D"=0, "R"=1))
+  any(is.na(tweets$party))
+
+  tweets[1:3,]
+  return(tweets)
+}
+
 
 # Clean corpus
 do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
@@ -61,9 +88,15 @@ do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
   corpus = tm_map(corpus, content_transformer(tolower))
   # remove stops, punctuation, numbers, whitespaces; 
 
-    # Remove everything besides english letters or space
+  # Remove everything besides english letters or space
   remov = function(x) gsub("[^[:alpha:][:space:]]*", "", x)
   corpus <- tm_map(corpus, content_transformer(remov))
+  
+  # remove URLs & @ mentions
+  removeURL = function(x) gsub("http[^[:space:]]*", "", x)
+  removeMention = function(x) gsub("@[:alpha][space:]]*", "", x)
+  corpus = tm_map(corpus, removeURL)
+  corpus = tm_map(corpus, removeMention)
   
   myStops = c(stopwords("english"), "https", "http", "debate", "debatenight", "debate night")
   corpus = tm_map(corpus, removeWords, myStops)
@@ -74,9 +107,7 @@ do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
     corpus = tm_map(corpus, removeSparseTerms)
   }
   
-  # remove URLs
-  removeURL = function(x) gsub("http[^[:space:]]*", "", x)
-  corpus = tm_map(corpus, removeURL)
+
   # stem
   # corpus = tm_map(corpus, stemDocument)
   
@@ -85,8 +116,94 @@ do.preprocess <- function(corpus, removeSparseTerms=FALSE) {
 ```
 
 ```{r}
+# Return reusable model of training data
+model.fit <- function(X_train, y_train, classifier) {
+   switch(classifier, 
+        nb = {
+          model = naiveBayes(x=X_train, y=y_train)
+          # y_predictions = predict(model, newdata=X_test)
+         },
+         dtree = {
+          model = rpart(y_train~X_train, method="class")
+          y_predictions = predict(model, newdata=X_test)
+         },
+        svmradial = {
+          X_train = as.matrix.csr(X_train)  # 1,244
+          # X_test  = as.matrix.csr(X_test)    # 622
+          model = svm(X_train, y_train, kernel="radial")
+          # y_predictions = predict(model, newdata=X_test)
+        },
+        svmlinear = {
+          X_train = as.matrix.csr(X_train)  # 1,244
+          # X_test  = as.matrix.csr(X_test)    # 622
+          model = svm(X_train, y_train, kernel="linear")
+          # y_predictions = predict(model, newdata=X_test)
+        },
+        rf = {
+          obs = nrow(X_train)
+          X_train2 = create_container(X_train, y_train, trainSize = 1:obs, virgin=FALSE)
+          model = train_model(container, "RF")
+          y_predictions = predict(model, newdata=X_test)  
+        }
+   )
+  return(model)
+}
+
+# Return predictions of y_test
+model.predict <- function(X_test, model) {
+  y_predictions = predict(model, newdata=X_test)
+  # if probabilties
+  ## probs = predict(model, newdata=X_test)
+  ## y_predictions = as.numeric(probs > .50)
+  return(y_predictions)
+}
+
+model.evaluate <- function(y_predictions, y_test) {
+  Precision = posPredValue(y_predictions, y_test)
+  Recall = sensitivity(y_predictions, y_test)
+  F1 = (2 * precision * recall) / (precision + recall)
+  
+  # bind values together
+  #rownames(col) = c("Precision", "Recall", "F1")
+  col = rbind(Precision, Recall, F1)
+  return(col)
+}
+
+crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
+  eval = matrix(, nrow = 3, ncol = 0)
+  n.obs = nrow(document_term_matrix) # no. of observations 
+  n.obs
+  s = sample(n.obs)
+  s
+  # k = 1
+  # k.fold = 3
+  for (k in 1:k.fold) {
+    test.idx = which(s %% k.fold == (k-1) ) # use modular operator
+    X_train = as.matrix(document_term_matrix[-test.idx,])  # 1,244
+    X_test  = as.matrix(document_term_matrix[test.idx,])    # 622
+    y_train = y[-test.idx]                      # 1,244
+    y_test  = y[test.idx]                        # 622
+    # model 
+    model = model.fit(X_train, y_train, classifier)
+    y_predictions = model.predict(X_test, model)
+    # evaluate predictions -- obtain precision, recall, F1 score
+    k.eval = model.evaluate(y_predictions, y_test)
+    eval = cbind(eval, k.eval)
+    eval
+  }
+  # return table of K fold precision, recall, fscore 
+  colnames(eval) = c("Fold 1", "Fold 2", "Fold 3")
+  eval
+  return(eval)
+}
+
+
+```
+
+```{r }
 # Tweets by User
-user.tweets = load.data.task1()
+user.tweets = load.data()
+user.tweets = load.data.DR()
 ```
 
 ```{r }
@@ -102,16 +219,22 @@ inspect(user.corpus[1:3])
 user.corpus = do.preprocess(user.corpus)
 inspect(user.corpus[1:3])
 
-## Finding Frequent Terms
-tdm = TermDocumentMatrix(user.corpus)
-findFreqTerms(tdm,lowfreq = 169)
- 
-# Make Term Document Matrix (tdm), where documents are user's Tweet Strings
-user.tdm = TermDocumentMatrix(user.corpus,
-                         control = list(
-                                        stemming = F)
-                         )
-user.tdm
+# Get Document Term Matrix
+document_term_matrix = DocumentTermMatrix(user.corpus)
+dim(document_term_matrix) # 1,866 observations / 1,264
+y = user.tweets$party
+length(y)                 # 1,866 observations / 1,264
+
+# Classifiers
+## nb, svm, svmsig
+eval.nb  = crossValidate(document_term_matrix, y, classifier = 'nb')
+eval.nb
+
+eval.svmradial = crossValidate(document_term_matrix, y, 'svmradial')
+eval.svmradial
+
+eval.svmsig = crossValidate(document_term_matrix, y, 'svmsig')
+eval.svmsig
 ```
 
 
