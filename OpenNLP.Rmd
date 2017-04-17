@@ -12,17 +12,12 @@ library(tm)       # for Corpus()
 library(e1071)    # svm
 library(rpart)    # decision trees
 library(ada)      # for adaboost
-library(SnowballC)
 library(lsa)
 library(NMF)
-library(rJava)
-library(openNLP)
-library(NLP)  
-library(RWeka)
-library(magrittr)
 library(caret)
 library(Matrix)
 library(SparseM)
+library(caret)
 ```
 
 
@@ -142,9 +137,24 @@ model.fit <- function(X_train, y_train, classifier) {
         rf = {
           obs = nrow(X_train)
           X_train2 = create_container(X_train, y_train, trainSize = 1:obs, virgin=FALSE)
-          model = train_model(container, "RF")
+          model = train_model(X_train2, "RF")
           y_predictions = predict(model, newdata=X_test)  
+        },
+        gbm = {
+          library(caret)
+          model = train(X_train, y_train, method="gbm", verbose=FALSE)
+          y_predictions = predict(model, newdata=X_test)
+        },
+        tune = {
+          params = expand.grid(interaction.depth = c(1, 5, 9),
+                               n.trees = (1:30)*50,
+                               n.minobsinnode = 20)
+          nrow(params)
+          model = train(X_train, y_train, method="adaboost")
+                        #verbose = FALSE, 
+                        #tuneGrid = params)
         }
+        
    )
   return(model)
 }
@@ -158,9 +168,10 @@ model.predict <- function(X_test, model) {
   return(y_predictions)
 }
 
+# Find Precision, Recall, and F Score
 model.evaluate <- function(y_predictions, y_test) {
   Precision = posPredValue(y_predictions, y_test)
-  Recall = sensitivity(y_predictions, y_test)
+  Recall    = sensitivity(y_predictions, y_test)
   F1 = (2 * precision * recall) / (precision + recall)
   
   # bind values together
@@ -175,8 +186,8 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
   n.obs
   s = sample(n.obs)
   s
-  # k = 1
-  # k.fold = 3
+  k = 1
+  k.fold = 3
   for (k in 1:k.fold) {
     test.idx = which(s %% k.fold == (k-1) ) # use modular operator
     X_train = as.matrix(document_term_matrix[-test.idx,])  # 1,244
@@ -203,7 +214,7 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
 ```{r }
 # Tweets by User
 user.tweets = load.data()
-user.tweets = load.data.DR()
+user.tweets = load.data.DR() # already preprocessed
 ```
 
 ```{r }
@@ -220,15 +231,15 @@ user.corpus = do.preprocess(user.corpus)
 inspect(user.corpus[1:3])
 
 # Get Document Term Matrix
-document_term_matrix = DocumentTermMatrix(user.corpus)
+document_term_matrix = DocumentTermMatrix(user.corpus, control=list(weighting=weightTfIdf))
 dim(document_term_matrix) # 1,866 observations / 1,264
 y = user.tweets$party
 length(y)                 # 1,866 observations / 1,264
 
 # Classifiers
 ## nb, svm, svmsig
-eval.nb  = crossValidate(document_term_matrix, y, classifier = 'nb')
-eval.nb
+# eval.nb  = crossValidate(document_term_matrix, y, classifier = 'nb')
+# eval.nb
 
 eval.svmradial = crossValidate(document_term_matrix, y, 'svmradial')
 eval.svmradial
