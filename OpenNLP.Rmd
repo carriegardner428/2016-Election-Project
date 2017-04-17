@@ -18,6 +18,7 @@ library(caret)
 library(Matrix)
 library(SparseM)
 library(caret)
+library(lsa)
 ```
 
 
@@ -153,6 +154,21 @@ model.fit <- function(X_train, y_train, classifier) {
           model = train(X_train, y_train, method="adaboost")
                         #verbose = FALSE, 
                         #tuneGrid = params)
+        },
+        test = {
+          # do pca
+          data.pca = prcomp(X_train, scale=F)
+          
+          train = cbind(X_train, y_train)
+          
+          colnames(train)[ncol(train)]= 'y'
+          train = as.data.frame(train)
+          
+          train$y = as.factor(train$y)
+          
+          
+          model = train(y ~ ., data = train, method = 'gbm', verbose=FALSE)
+          y_predictions = predict(model, newdata=X_test)
         }
         
    )
@@ -231,7 +247,7 @@ user.corpus = do.preprocess(user.corpus)
 inspect(user.corpus[1:3])
 
 # Get Document Term Matrix
-document_term_matrix = DocumentTermMatrix(user.corpus, control=list(weighting=weightTfIdf))
+document_term_matrix = DocumentTermMatrix(user.corpus)
 dim(document_term_matrix) # 1,866 observations / 1,264
 y = user.tweets$party
 length(y)                 # 1,866 observations / 1,264
@@ -246,6 +262,34 @@ eval.svmradial
 
 eval.svmsig = crossValidate(document_term_matrix, y, 'svmsig')
 eval.svmsig
+
+# Dimensionality Reduction
+
+### TDM
+tdm = TermDocumentMatrix(user.corpus)
+##### TF-IDF
+tfidf.tdm = as.matrix(tdm)
+##### TF-IDF weighting
+tfidf.weights = lw_tf(tfidf.tdm) * gw_idf(tfidf.tdm)
+
+lsa.space = lsa(tfidf.weights, dims = 4)
+dim(lsa.space)
+
+# Calculate LSA MDS
+lsa.dist.mat = dist(t(as.textmatrix(lsa.space)))
+lsa.mds = cmdscale(lsa.dist.mat, k = 2)
+
+# Plot LSA MDS
+lsa.data = data.frame(x = lsa.mds[, 1], 
+                      y = lsa.mds[, 2], 
+                      Topic = user.corpus$Party, 
+                      id = row.names(user.corpus))
+ggplot(lsa.data, aes(x = x, y = y, color = Topic)) + 
+  geom_point(shape = 1) +
+  ggtitle("MDS Plot - LSA")
+
+
+
 ```
 
 
