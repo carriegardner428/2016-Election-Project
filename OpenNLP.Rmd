@@ -175,6 +175,16 @@ model.fit <- function(X_train, y_train, classifier) {
   return(model)
 }
 
+y_predictions[y_predictions=="1"] = 0
+y_predictions[y_predictions=="2"] = 1
+
+test = revalue(y_predictions, c("1"="0", "2"="1"))
+
+
+data$party[data$party=="G"] = "I"
+
+
+
 # Return predictions of y_test
 model.predict <- function(X_test, model) {
   y_predictions = predict(model, newdata=X_test)
@@ -195,6 +205,7 @@ model.evaluate <- function(y_predictions, y_test) {
   col = rbind(Precision, Recall, F1)
   return(col)
 }
+
 
 crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
   eval = matrix(, nrow = 3, ncol = 0)
