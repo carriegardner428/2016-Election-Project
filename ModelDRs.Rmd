@@ -181,22 +181,22 @@ kable(dtm.eval.svmlinear) # ~73%
 # TFIDF Weighted Document Term Matrix, use y.tfidf
 ### Classifiers - NB, SVMRadial, SVMLinear
 tfidf.eval.nb = crossValidate(dtm.tfidf, y.tfidf, 'nb')
-kable(tfidf.eval.nb)
+kable(tfidf.eval.nb)        # ~11.92%
 tfidf.eval.svmradial = crossValidate(dtm.tfidf, y.tfidf, 'svmradial')
-kable(tfidf.eval.svmradial)
+kable(tfidf.eval.svmradial) # ~82.08
 tfidf.eval.svmlinear = crossValidate(dtm.tfidf, y.tfidf, 'svmlinear')
-kable(tfidf.eval.svmlinear)
+kable(tfidf.eval.svmlinear) # ~81.56
 ```
 
 ## LSA DTM
 ```{r LSA}
 # LSA Document Term Matrix w/10 features, use y.tfidf
 lsa.eval.nb = crossValidate(dtm.lsa.10, y.tfidf, 'nb')
-kable(lsa.eval.nb)
+kable(lsa.eval.nb)        # ~NA
 lsa.eval.svmradial = crossValidate(dtm.lsa.10, y.tfidf, 'svmradial')
-kable(lsa.eval.svmradial)
+kable(lsa.eval.svmradial) # ~82.07%
 lsa.eval.svmlinear = crossValidate(dtm.lsa.10, y.tfidf, 'svmlinear')
-kable(lsa.eval.svmlinear)
+kable(lsa.eval.svmlinear) # ~82.08%
 ```
 
 ## PCA DTM
@@ -204,20 +204,20 @@ kable(lsa.eval.svmlinear)
 # PCA Document Term Matrix
 ### Classifiers - NB, SVMRadial, SVMLinear
 pca.eval.nb = crossValidate(dtm.pca, y, 'nb')
-kable(pca.eval.nb)
+kable(pca.eval.nb)        # ~51.22%
 pca.eval.svmradial = crossValidate(dtm.pca, y, 'svmradial')
-kable(pca.eval.svmradial)
+kable(pca.eval.svmradial) # ~82.10%
 pca.eval.svmlinear = crossValidate(dtm.pca, y, 'svmlinear')
-kable(pca.eval.svmlinear)
+kable(pca.eval.svmlinear) # ~73.67%
 ```
 
 # Save 3 Top Models
-#### Top Models: 
+#### Top Models: dtm.eval.svmradial (82.14%), pca.eval.svmradial (82.10%), lsa.eval.svmlinear (82.08%)
 ```{r }
 # Get models based of of mean F1 score
 model1 = model.fit(document_term_matrix, y, 'svmradial')
-model2 = model.fit(dtm.lsa.10, y.tfidf, 'svmradial')
-model3 = model.fit(dtm.pca, y, 'svmradial')
+model2 = model.fit(dtm.pca, y, 'svmradial')
+model3 = model.fit(dtm.lsa, y.tfidf, 'svmlinear')
 
 # Save Models as usermodelX.rds
 install.packages('saveRDS')

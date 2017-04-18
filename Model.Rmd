@@ -284,3 +284,4 @@ kable(pca.eval.svmlinear)
 # Save 4 Top Models
 #### Top Models: 
 ```{r }
+model1 = 
