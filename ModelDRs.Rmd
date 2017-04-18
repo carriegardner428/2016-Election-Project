@@ -50,13 +50,6 @@ do.pca <- function(dtm) {
   return(dtm.pca)
 }
 
-do.mds <- function(dtm) {
-  dtm = as.matrix(dtm)
-  dtm.dist = dist(t(dtm))
-  dtm.mds = cmdscale(dtm.dist, k=2)
-  return(dtm.mds)
-}
-
 # Return reusable model of training data
 model.fit <- function(X_train, y_train, classifier) {
    switch(classifier, 
@@ -161,15 +154,10 @@ y.tfidf   = y[row.totals > 0]
 ## PCA, LSA, MDS
 dtm.lsa.10 = do.lsa(dtm.tfidf, ndims=10) # 1264, 10; Matrix object
 dtm.pca = do.pca(document_term_matrix) # 1264, 1264; Matrix object
-# dtm.mds = do.mds(dtm) 
 
 dim(dtm.lsa.10)
 dim(dtm.pca)
-# dim(dtm.mds)
 
-##################  MDS
-# sortedv1 = dtm.mds[order(V1),]
-# dim(dtm.mds)
 ```
 
 # Run Cross Validation
@@ -181,11 +169,11 @@ dim(dtm.pca)
 # Standard Document Term Matrix
 ### Classifiers - NB, SVMRadial, SVMLinear
 dtm.eval.nb = crossValidate(document_term_matrix, y, 'nb')
-kable(dtm.eval.nb)
+kable(dtm.eval.nb)        # ~NA
 dtm.eval.svmradial = crossValidate(document_term_matrix, y, 'svmradial')
-kable(dtm.eval.svmradial)
+kable(dtm.eval.svmradial) # ~82.14%
 dtm.eval.svmlinear = crossValidate(document_term_matrix, y, 'svmlinear')
-kable(dtm.eval.svmlinear)
+kable(dtm.eval.svmlinear) # ~73%
 ```
 
 ## TFIDF Document Term Matrix
@@ -223,8 +211,22 @@ pca.eval.svmlinear = crossValidate(dtm.pca, y, 'svmlinear')
 kable(pca.eval.svmlinear)
 ```
 
-# Save 4 Top Models
+# Save 3 Top Models
 #### Top Models: 
 ```{r }
-model1 = 
+# Get models based of of mean F1 score
+model1 = model.fit(document_term_matrix, y, 'svmradial')
+model2 = model.fit(dtm.lsa.10, y.tfidf, 'svmradial')
+model3 = model.fit(dtm.pca, y, 'svmradial')
+
+# Save Models as usermodelX.rds
+install.packages('saveRDS')
+library(saveRDS)
+saveRDS(model1, "usermodel1.rds")
+saveRDS(model2, "usermodel2.rds")
+saveRDS(model3, "usermodel3.rds")
+
+```
+
+
 

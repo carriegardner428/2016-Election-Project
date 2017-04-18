@@ -124,11 +124,15 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
     # evaluate predictions -- obtain precision, recall, F1 score
     k.eval = model.evaluate(y_predictions, y_test)
     eval = cbind(eval, k.eval)
-    eval
   }
+  
   # return table of K fold precision, recall, fscore 
   colnames(eval) = c("Fold 1", "Fold 2", "Fold 3")
   eval
+  means = rowMeans(eval)
+  eval = cbind(eval, Mean=means)
+  eval
+    
   return(eval)
 }
 
@@ -216,9 +220,37 @@ kable(pca.eval.svmlinear)
 ```
 
 # Test Model from User Data on Politician's Data
-## Load Models
-#### 4 Top Models: 
+## Load Models.  
+#### 3 Top Models: 
+Use same types of features in evaluation user dtm.tfiid -> politicians dtm.tfidf feature set
 ```{r }
+library(saveRDS)
+# Load 3 Top Models
+model1 = readRDS("usermodel1.rds")
+model2 = readRDS("usermodel2.rds")
+model3 = readRDS("usermodel3.rds")
+```
+
+## Model 1 Evaluation
+```{r }
+y_predictions = model.predict(document_term_matrix, model1)
+model1.eval   = model.evaluate(y_predictions, y)
+model1.eval
+```
+
+## Model 2 Evaluation
+```{r }
+y_predictions = model.predict(document_term_matrix, model2)
+model2.eval   = model.evaluate(y_predictions, y)
+model2.eval
+
+```
+
+## Model 3 Evaluation
+```{r }
+y_predictions = model.predict(document_term_matrix, model3)
+model3.eval   = model.evaluate(y_predictions, y)
+model3.eval
 
 ```
 
