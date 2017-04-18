@@ -16,6 +16,7 @@ library(caret)
 library(Matrix)
 library(SparseM)
 library(caret)
+library(knitr)
 ```
 
 # Helper Functions
@@ -36,6 +37,25 @@ load.data.DR <- function() {
 
   tweets[1:3,]
   return(tweets)
+}
+
+do.lsa <- function(dtm.tfidf, ndims=10) {
+  S = svd(dtm.tfidf, nu = ndims, nv = ndims)
+  dtm.lsa = S$u
+  return(dtm.lsa)
+}
+
+do.pca <- function(dtm) {
+  pca = prcomp(dtm, scale=FALSE)
+  dtm.pca = predict(pca) # 1264, 1264
+  return(dtm.pca)
+}
+
+do.mds <- function(dtm) {
+  dtm = as.matrix(dtm)
+  dtm.dist = dist(t(dtm))
+  dtm.mds = cmdscale(dtm.dist, k=2)
+  return(dtm.mds)
 }
 
 # Return reusable model of training data
@@ -61,57 +81,14 @@ model.fit <- function(X_train, y_train, classifier) {
           # X_test  = as.matrix.csr(X_test)    # 622
           model = svm(X_train, y_train, kernel="linear")
           # y_predictions = predict(model, newdata=X_test)
-        },
-        rf = {
-          obs = nrow(X_train)
-          X_train2 = create_container(X_train, y_train, trainSize = 1:obs, virgin=FALSE)
-          model = train_model(X_train2, "RF")
-          y_predictions = predict(model, newdata=X_test)  
-        },
-        gbm = {
-          library(caret)
-          model = train(X_train, y_train, method="gbm", verbose=FALSE)
-          y_predictions = predict(model, newdata=X_test)
-        },
-        tune = {
-          params = expand.grid(interaction.depth = c(1, 5, 9),
-                               n.trees = (1:30)*50,
-                               n.minobsinnode = 20)
-          nrow(params)
-          model = train(X_train, y_train, method="adaboost")
-                        #verbose = FALSE, 
-                        #tuneGrid = params)
-        },
-        test = {
-          dim(X_train)
-          data.pca = prcomp(X_train, scale=FALSE)
-          # summary(data.pca)
-          # Find first 750 PCs
-          train<-data.pca$x[,1:10]
-          dim(train)
-          
-          train = cbind(train, y_train)
-          colnames(train)[ncol(train)] = 'y'
-          train = as.data.frame(train)
-          train$y = as.factor(train$y)
-          
-          model = train(y~., data=train, method="adaboost")
-          
-          model = naiveBayes(y~., data=train)
-          y_predictions = predict(model, newdata=X_test)
-          
-          y_predictions =  
-          
-        
         }
-        
    )
   return(model)
 }
 
 # Return predictions of y_test
 model.predict <- function(X_test, model) {
-  X_test = as.data.frame(X_test)
+  # X_test = as.data.frame(X_test)
   y_predictions = predict(model, newdata=X_test)
   # if probabilties
   ## probs = predict(model, newdata=X_test)
@@ -123,23 +100,20 @@ model.predict <- function(X_test, model) {
 model.evaluate <- function(y_predictions, y_test) {
   Precision = posPredValue(y_predictions, y_test)
   Recall    = sensitivity(y_predictions, y_test)
-  F1 = (2 * precision * recall) / (precision + recall)
-  
+  F1 = (2 * Precision * Recall) / (Precision + Recall)
+
   # bind values together
-  #rownames(col) = c("Precision", "Recall", "F1")
   col = rbind(Precision, Recall, F1)
   return(col)
 }
 
 # Cross Validate
 crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
-  eval = matrix(, nrow = 3, ncol = 0)
+  eval = matrix(, nrow = 3, ncol = 0) # empty matrix with 3 rows
   n.obs = nrow(document_term_matrix) # no. of observations 
-  n.obs
   s = sample(n.obs)
-  s
-  k = 1
-  k.fold = 3
+  # k = 1
+  # k.fold = 3
   for (k in 1:k.fold) {
     test.idx = which(s %% k.fold == (k-1) ) # use modular operator
     X_train = as.matrix(document_term_matrix[-test.idx,])  # 1,244
@@ -169,53 +143,29 @@ user.tweets = load.data.DR()
 # Get corpus
 user.corpus = Corpus(VectorSource(user.tweets$text))
 
-# Get DTM, and TFIDF Dtm, and labels (y)
-document_term_matrix = DocumentTermMatrix(user.corpus)
-dtm.tfidf = DocumentTermMatrix(user.corpus, control = list(weighting=weightTfIdf))
+# Get DTM & y, and TFIDF Dtm & y.tfidf
+document_term_matrix = DocumentTermMatrix(user.corpus) # 1264 rows
 y = user.tweets$party
 
+dtm.tfidf = DocumentTermMatrix(user.corpus, control = list(weighting=weightTfIdf))
+### Drop empty rows
+row.totals = apply(dtm.tfidf, 1, sum)
+dtm.tfidf = dtm.tfidf[row.totals > 0, ] # 1247 rows 
+y.tfidf   = y[row.totals > 0]
+
 # Get reduced DTMs
-## PCA, LSA, 
-dtm.pca = do.pca(dtm) # 1264, 1264; Matrix object
+## PCA, LSA, MDS
 dtm.lsa.10 = do.lsa(dtm.tfidf, ndims=10) # 1264, 10; Matrix object
-dtm.mds = do.mds(dtm)
+dtm.pca = do.pca(dtm) # 1264, 1264; Matrix object
+# dtm.mds = do.mds(dtm) 
 
-## Drop unused rows
+dim(dtm.lsa.10)
+dim(dtm.pca)
+# dim(dtm.mds)
 
-
-### Drop rows where TfIdf weight == 0
-row.totals = apply(dtm, 1, sum)
-length(row.totals)
-length(y)
-
-dim(dtm)
-dtm.new = dtm[row.totals > 0, ]
-y.new   = y[row.totals > 0]
-length(y.new) # 1264
-dim(dtm.new)# dim 1264, 11897
-
-
-dim(dtm) # doc, terms
-
-
-do.lsa <- function(dtm.tfidf, ndims=10) {
-  S = svd(dtm.tfidf, nu = ndims, nv = ndims)
-  dtm.lsa = S$u
-  return(dtm.lsa)
-}
-
-do.pca <- function(dtm) {
-  pca = prcomp(dtm, scale=FALSE)
-  dtm.pca = predict(pca) # 1264, 1264
-  return(dtm.pca)
-}
-
-do.mds <- function(dtm) {
-  dtm = as.matrix(dtm)
-  dtm.dist = dist(t(dtm))
-  dtm.mds = cmdscale(dtm.dist, k=2)
-  return(dtm.mds)
-}
+##################  MDS
+# sortedv1 = dtm.mds[order(V1),]
+# dim(dtm.mds)
 ```
 
 # Run Cross Validation
@@ -227,30 +177,46 @@ do.mds <- function(dtm) {
 # Standard Document Term Matrix
 ### Classifiers - NB, SVMRadial, SVMLinear
 dtm.eval.nb = crossValidate(document_term_matrix, y, 'nb')
+kable(dtm.eval.nb)
 dtm.eval.svmradial = crossValidate(document_term_matrix, y, 'svmradial')
+kable(dtm.eval.svmradial)
 dtm.eval.svmlinear = crossValidate(document_term_matrix, y, 'svmlinear')
-
+kable(dtm.eval.svmlinear)
 ```
 ## TFIDF Document Term Matrix
 ```{r }
-# TFIDF Weighted Document Term Matrix
+# TFIDF Weighted Document Term Matrix, use y.tfidf
 ### Classifiers - NB, SVMRadial, SVMLinear
-tfidf.eval.nb = crossValidate(dtm.tfidf, y, 'nb')
-tfidf.eval.svmradial = crossValidate(dtm.tfidf, y, 'svmradial')
-tfidf.eval.svmlinear = crossValidate(dtm.tfidf, y, 'svmlinear')
+tfidf.eval.nb = crossValidate(dtm.tfidf, y.tfidf, 'nb')
+tfidf.eval.svmradial = crossValidate(dtm.tfidf, y.tfidf, 'svmradial')
+tfidf.eval.svmlinear = crossValidate(dtm.tfidf, y.tfidf, 'svmlinear')
 ```
 
 ## LSA DTM
 ```{r }
-# LSA Document Term Matrix
+# LSA Document Term Matrix w/10 features, use y.tfidf
 ### Classifiers - NB, SVMRadial, SVMLinear
-lsa.eval.nb = crossValidate(dtm.tfidf, y, 'nb')
-lsa.eval.svmradial = crossValidate(dtm.tfidf, y, 'svmradial')
-lsa.eval.svmlinear = crossValidate(dtm.tfidf, y, 'svmlinear')
-
+lsa.eval.nb = crossValidate(dtm.lsa.10, y.tfidf, 'nb')
+lsa.eval.svmradial = crossValidate(dtm.lsa.10, y.tfidf, 'svmradial')
+lsa.eval.svmlinear = crossValidate(dtm.lsa.10, y.tfidf, 'svmlinear')
 ```
 
+## PCA DTM
+```{r }
+# PCA Document Term Matrix
+### Classifiers - NB, SVMRadial, SVMLinear
+pca.eval.nb = crossValidate(dtm.pca, y, 'nb')
+pca.eval.svmradial = crossValidate(dtm.pca, y, 'svmradial')
+pca.eval.svmlinear = crossValidate(dtm.pca, y, 'svmlinear')
+```
 
+## MDS DTM
+```{r }
+# PCA Document Term Matrix
+### Classifiers - NB, SVMRadial, SVMLinear
+# mds.eval.nb = crossValidate(dtm.mds, y, 'nb')
+# mds.eval.svmradial = crossValidate(dtm.mds, y, 'svmradial')
+# mds.eval.svmlinear = crossValidate(dtm.mds, y, 'svmlinear')
 
 
 
