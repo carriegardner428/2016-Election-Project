@@ -32,8 +32,12 @@ load.data <- function() {
     data = na.omit(data)
   }
   
-  # Collapse parties
-  table(data$party)
+  # Remove all besides D and R
+  
+  x <- data[data$party!="G"]
+  levels(x) # still the same levels
+  
+table(data$party)
   data$party = revalue(data$party, c("G"="I", "O"="I", "L"="I"))
   table(data$party)
   
@@ -106,6 +110,12 @@ model.fit <- function(X_train, y_train, classifier) {
           model = naiveBayes(x=X_train, y=y_train)
           # y_predictions = predict(model, newdata=X_test)
          },
+        tree = {
+          train = cbind(X_train, y_train)
+          colnames(train)[ncol(train)] = 'y'
+          train = as.data.frame(train)
+          model = rpart(y~., data=train)
+        },
         lib = {
           X_train = as.matrix.csr(X_train)  # 1,244
           model = LiblineaR(X_train, y_train)
@@ -129,7 +139,7 @@ model.fit <- function(X_train, y_train, classifier) {
           colnames(train)[ncol(train)] = 'y'
           train = as.data.frame(train)
           model = svm(y~., data=train)
-          model = train(y~., data=train, method='bayesglm')
+          # model = train(y~., data=train, method='bayesglm')
         }
    )
   return(model)
@@ -138,7 +148,7 @@ model.fit <- function(X_train, y_train, classifier) {
 # Return predictions of y_test
 model.predict <- function(X_test, model) {
   # X_test = as.data.frame(X_test)
-  y_predictions = predict(model, newdata=X_test)
+  y_predictions = predict(model, newdata=X_test, type="class")
   # if probabilties
   ## probs = predict(model, newdata=X_test)
   ## y_predictions = as.numeric(probs > .50)
@@ -161,8 +171,8 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
   eval = matrix(, nrow = 3, ncol = 0) # empty matrix with 3 rows
   n.obs = nrow(document_term_matrix) # no. of observations 
   s = sample(n.obs)
-  k = 1
-  k.fold = 3
+  # k = 1
+  # k.fold = 3
   for (k in 1:k.fold) {
     test.idx = which(s %% k.fold == (k-1) ) # use modular operator
     X_train = as.matrix(document_term_matrix[-test.idx,])  # 1,244
@@ -188,7 +198,6 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
 # Load Data & Create DTMs
 ```{r Load}
 user.tweets = load.data()
-
 
 # Get corpus
 user.corpus = Corpus(VectorSource(user.tweets$text))
@@ -231,7 +240,7 @@ dim(dtm.pca)
 ### Classifiers - NB, SVMRadial, SVMLinear
 dtm.eval.nb = crossValidate(document_term_matrix, y, 'nb')
 kable(dtm.eval.nb)
-dtm.eval.svmradial = crossValidate(document_term_matrix, y, 'svmradial')
+dtm.eval.svm = crossValidate(document_term_matrix, y, 'svm')
 kable(dtm.eval.svmradial)
 dtm.eval.svmlinear = crossValidate(document_term_matrix, y, 'svmlinear')
 kable(dtm.eval.svmlinear)
@@ -272,14 +281,6 @@ pca.eval.svmlinear = crossValidate(dtm.pca, y, 'svmlinear')
 kable(pca.eval.svmlinear)
 ```
 
-## MDS DTM
-```{r MDS}
-# PCA Document Term Matrix
-### Classifiers - NB, SVMRadial, SVMLinear
-# mds.eval.nb = crossValidate(dtm.mds, y, 'nb')
-# mds.eval.svmradial = crossValidate(dtm.mds, y, 'svmradial')
-# mds.eval.svmlinear = crossValidate(dtm.mds, y, 'svmlinear')
-
-
-
-
+# Save 4 Top Models
+#### Top Models: 
+```{r }

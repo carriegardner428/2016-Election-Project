@@ -1,5 +1,5 @@
 ---
-title: "ModelDRs"
+title: "Model Politicians"
 output: html_document
 ---
 
@@ -20,19 +20,17 @@ library(LiblineaR)# for LiblineaR algorithm
 
 # Helper Functions
 ```{r Helper}
-load.data.DR <- function() {
+load.data.politicians <- function() {
   # preprocessed in python
-  tweets = read.csv('DR_users.csv') # data is preprocessed in python
+  tweets = read.csv('tweets_by_politicians.csv') # data is preprocessed in python
   tweets = tweets[,-1]
   tweets[1:3,]
-  table(tweets$party) # D:881, R:383
+  table(tweets$party) # D:9, R:9
   
   tweets$text = as.character(tweets$text)
-  tweets$state_code = as.character(tweets$state_code)
   
   # Recode Dems = 0, Reps = 1
   tweets$party = revalue(tweets$party, c("D"=0, "R"=1))
-  any(is.na(tweets$party))
 
   tweets[1:3,]
   return(tweets)
@@ -126,15 +124,11 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
     # evaluate predictions -- obtain precision, recall, F1 score
     k.eval = model.evaluate(y_predictions, y_test)
     eval = cbind(eval, k.eval)
+    eval
   }
-  
   # return table of K fold precision, recall, fscore 
   colnames(eval) = c("Fold 1", "Fold 2", "Fold 3")
   eval
-  means = rowMeans(eval)
-  eval = cbind(eval, Mean=means)
-  eval
-    
   return(eval)
 }
 
@@ -142,20 +136,17 @@ crossValidate <- function(document_term_matrix, y, classifier, k.fold=3) {
 
 # Load Data & Create DTMs
 ```{r Load}
-user.tweets = load.data.DR()
+poli.tweets = load.data.politicians()
 
 # Get corpus
-user.corpus = Corpus(VectorSource(user.tweets$text))
+poli.corpus = Corpus(VectorSource(poli.tweets$text))
 
 # Get DTM & y, and TFIDF Dtm & y.tfidf
-document_term_matrix = DocumentTermMatrix(user.corpus) # 1264 rows
-y = user.tweets$party
+document_term_matrix = DocumentTermMatrix(poli.corpus) # 18 rows, 9137 cols
+y = poli.tweets$party # 18
 
-dtm.tfidf = DocumentTermMatrix(user.corpus, control = list(weighting=weightTfIdf))
-### Drop empty rows
-row.totals = apply(dtm.tfidf, 1, sum)
-dtm.tfidf = dtm.tfidf[row.totals > 0, ] # 1247 rows 
-y.tfidf   = y[row.totals > 0]
+dtm.tfidf = DocumentTermMatrix(poli.corpus, control = list(weighting=weightTfIdf)) # no empty rows
+y.tfidf = poli.tweets$party
 
 # Get reduced DTMs
 ## PCA, LSA, MDS
@@ -172,8 +163,9 @@ dim(dtm.pca)
 # dim(dtm.mds)
 ```
 
-# Run Cross Validation
-#### Features: Standard DTM, TFIDF DTM, LSA DTM, and PCA DTM
+# Build Model on Politician's Data
+## Run Cross Validation
+#### Features: Standard DTM, TFIDF DTM, LSA DTM, PCA DTM, and MDS DTM
 #### Classifiers: Naive Bayes, SVM-Radial Kernel, SVM-Linear Kernel
 
 ## Standard Document Term Matrix
@@ -223,8 +215,10 @@ pca.eval.svmlinear = crossValidate(dtm.pca, y, 'svmlinear')
 kable(pca.eval.svmlinear)
 ```
 
-# Save 4 Top Models
-#### Top Models: 
+# Test Model from User Data on Politician's Data
+## Load Models
+#### 4 Top Models: 
 ```{r }
-model1 = 
+
+```
 
