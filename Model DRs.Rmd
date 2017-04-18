@@ -10,13 +10,12 @@ library(tm)       # for Corpus()
 library(e1071)    # svm
 library(rpart)    # decision trees
 library(ada)      # for adaboost
-library(lsa)
-library(NMF)
-library(caret)
-library(Matrix)
-library(SparseM)
-library(caret)
-library(knitr)
+library(lsa)      # LSA
+library(Matrix)   # for SVM matricies
+library(SparseM)  # for SVM matricies
+library(caret)    # for Precision, Recall()
+library(knitr)    # for kable
+library(LiblineaR)# for LiblineaR algorithm
 ```
 
 # Helper Functions
@@ -65,11 +64,12 @@ model.fit <- function(X_train, y_train, classifier) {
           model = naiveBayes(x=X_train, y=y_train)
           # y_predictions = predict(model, newdata=X_test)
          },
-         dtree = {
-          # model = rpart(y~., data=train, method="class")
-          model = rpart(y_train~X_train, method="class")
-          y_predictions = predict(model, newdata=X_test)
-         },
+        lib = {
+          X_train = as.matrix.csr(X_train)  # 1,244
+          model = LiblineaR(X_train, y_train)
+          X_test2 = as.matrix.csr(X_test)
+          y_predictions = predict(model, newx=X_test2)
+        },
         svmradial = {
           X_train = as.matrix.csr(X_train)  # 1,244
           # X_test  = as.matrix.csr(X_test)    # 622
@@ -156,7 +156,7 @@ y.tfidf   = y[row.totals > 0]
 # Get reduced DTMs
 ## PCA, LSA, MDS
 dtm.lsa.10 = do.lsa(dtm.tfidf, ndims=10) # 1264, 10; Matrix object
-dtm.pca = do.pca(dtm) # 1264, 1264; Matrix object
+dtm.pca = do.pca(document_term_matrix) # 1264, 1264; Matrix object
 # dtm.mds = do.mds(dtm) 
 
 dim(dtm.lsa.10)
@@ -183,22 +183,28 @@ kable(dtm.eval.svmradial)
 dtm.eval.svmlinear = crossValidate(document_term_matrix, y, 'svmlinear')
 kable(dtm.eval.svmlinear)
 ```
+
 ## TFIDF Document Term Matrix
 ```{r }
 # TFIDF Weighted Document Term Matrix, use y.tfidf
 ### Classifiers - NB, SVMRadial, SVMLinear
 tfidf.eval.nb = crossValidate(dtm.tfidf, y.tfidf, 'nb')
+kable(tfidf.eval.nb)
 tfidf.eval.svmradial = crossValidate(dtm.tfidf, y.tfidf, 'svmradial')
+kable(tfidf.eval.svmradial)
 tfidf.eval.svmlinear = crossValidate(dtm.tfidf, y.tfidf, 'svmlinear')
+kable(tfidf.eval.svmlinear)
 ```
 
 ## LSA DTM
 ```{r }
 # LSA Document Term Matrix w/10 features, use y.tfidf
-### Classifiers - NB, SVMRadial, SVMLinear
 lsa.eval.nb = crossValidate(dtm.lsa.10, y.tfidf, 'nb')
+kable(lsa.eval.nb)
 lsa.eval.svmradial = crossValidate(dtm.lsa.10, y.tfidf, 'svmradial')
+kable(lsa.eval.svmradial)
 lsa.eval.svmlinear = crossValidate(dtm.lsa.10, y.tfidf, 'svmlinear')
+kable(lsa.eval.svmlinear)
 ```
 
 ## PCA DTM
@@ -206,8 +212,11 @@ lsa.eval.svmlinear = crossValidate(dtm.lsa.10, y.tfidf, 'svmlinear')
 # PCA Document Term Matrix
 ### Classifiers - NB, SVMRadial, SVMLinear
 pca.eval.nb = crossValidate(dtm.pca, y, 'nb')
+kable(pca.eval.nb)
 pca.eval.svmradial = crossValidate(dtm.pca, y, 'svmradial')
+kable(pca.eval.svmradial)
 pca.eval.svmlinear = crossValidate(dtm.pca, y, 'svmlinear')
+kable(pca.eval.svmlinear)
 ```
 
 ## MDS DTM
